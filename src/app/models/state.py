@@ -3,10 +3,9 @@ from .. import db
 class State(db.Model):
     __tablename__ = "states"
 
-    state_name = db.Column(db.String(50), primary_key=True)
-    ocd_id = db.Column(db.string(100), unique = True, nullable = True)
-    fips_code = dp.Column(db.String(2), nullable = True)
-
+    state_name = db.Column(db.String(50), primary_key=True)  # ex. california
+    ocd_id = db.Column(db.String(100), unique=True, nullable=True)  # 'ocd-division/country:us/state:ca'
+    fips_code = db.Column(db.String(2), unique=True, nullable=True)  # '06'
 
     def __init__(self, state_name: str, ocd_id: str = None, fips_code: str = None):
         self.state_name = state_name
