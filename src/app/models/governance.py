@@ -46,8 +46,8 @@ class Official(db.Model):
 class Source(db.Model):
     __tablename__ = "sources"
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    body_id = db.Column(UUID(as_uuid=True), db.ForeignKey("bodies.id"), nullable=False)
-    source_type = db.Column(PgEnum(SourceType, name="source_type", create_type=True), nullable=False)
+    body_id = db.Column(UUID(as_uuid=True), db.ForeignKey("bodies.id"), nullable=True)
+    source_type = db.Column(PgEnum(SourceType, name="source_type", create_type=True), nullable=True)
     external_id = db.Column(db.String(120), nullable=True)           # council file number, bill id,.. etc
     title = db.Column(db.String(400), nullable=True)
     summary = db.Column(db.Text, nullable=True)

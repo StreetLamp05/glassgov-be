@@ -49,3 +49,20 @@ docker compose exec app poetry run flask db current
 
 don't run flask db init if migrations/ dir exists
 
+test discover api:
+
+```bash
+curl -s http://localhost:5001/api/v1/discover/ \
+  -H 'Content-Type: application/json' \
+  -d '{"city":"Los Angeles"}' | jq
+
+
+curl -s http://localhost:5001/api/v1/discover/ \
+  -H 'Content-Type: application/json' \
+  -d '{"city":"Los Angeles","state_name":"}' | jq
+  
+  
+  curl -s http://localhost:5001/api/v1/discover/ \
+  -H 'Content-Type: application/json' \
+  -d '{"city":"Los Angeles"}' | jq
+```
