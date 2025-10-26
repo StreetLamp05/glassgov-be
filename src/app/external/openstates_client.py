@@ -1,16 +1,23 @@
-import requests
-from typing import Dict, List, Any
 import os
+import time
+from typing import Any, Dict, List, Optional, Tuple
+
+import requests
+from flask import current_app
+
 BASE_URL = "https://v3.openstates.org"
-API_KEY = os.getenv("OPENSTATES_API_KEY")
-# TODO: FIX API KEY FETCHING, ALSO REQ NEW API KEY
+
 class OpenStatesError(Exception):
     pass
 
 class InvalidAPIKeyError(OpenStatesError):
     pass
 
-JURISDICTION_MAP = {
+class RateLimitError(OpenStatesError):
+    pass
+
+# Map “human” jurisdiction names to OCD jurisdiction IDs (state-level).
+JURISDICTION_MAP: Dict[str, str] = {
     "alabama": "ocd-jurisdiction/country:us/state:al/government",
     "alaska": "ocd-jurisdiction/country:us/state:ak/government",
     "arizona": "ocd-jurisdiction/country:us/state:az/government",
@@ -61,98 +68,99 @@ JURISDICTION_MAP = {
     "west virginia": "ocd-jurisdiction/country:us/state:wv/government",
     "wisconsin": "ocd-jurisdiction/country:us/state:wi/government",
     "wyoming": "ocd-jurisdiction/country:us/state:wy/government",
-    "district of columbia": "ocd-jurisdiction/country:us/district:dc/government"
+    "district of columbia": "ocd-jurisdiction/country:us/district:dc/government",
 }
-LATEST_SESSIONS: Dict[str, str] = {}
 
+# simple in-proc cache for the latest session per jurisdiction_id
+_LATEST_SESSIONS: Dict[str, str] = {}
+
+DEFAULT_TIMEOUT = 10.0
+
+def _headers() -> Dict[str, str]:
+    # Prefer Flask config, fallback to env var
+    api_key = current_app.config.get("OPENSTATES_API_KEY") if current_app else os.getenv("OPENSTATES_API_KEY")
+    if not api_key:
+        raise InvalidAPIKeyError("OPENSTATES_API_KEY not configured")
+    return {"X-API-KEY": api_key}
+
+def _request(method: str, path: str, *, params: Dict[str, Any]) -> Dict[str, Any]:
+    url = f"{BASE_URL}{path}"
+    try:
+        r = requests.request(method, url, headers=_headers(), params=params, timeout=DEFAULT_TIMEOUT)
+    except requests.RequestException as e:
+        raise OpenStatesError(f"Network error: {e}") from e
+
+    if r.status_code == 401:
+        raise InvalidAPIKeyError("OpenStates API key invalid or missing")
+    if r.status_code == 429:
+        # honor Retry-After if present
+        ra = int(r.headers.get("Retry-After", "1"))
+        time.sleep(min(ra, 5))
+        raise RateLimitError("OpenStates rate limit hit")
+    if r.status_code >= 400:
+        raise OpenStatesError(f"OpenStates error {r.status_code}: {r.text}")
+
+    return r.json()
+
+def _normalize_bill(b: Dict[str, Any]) -> Dict[str, Any]:
+    # Normalize fields we actually use in the app
+    return {
+        "id": (b.get("identifier") or b.get("id")),
+        "title": b.get("title"),
+        "jurisdiction": (b.get("jurisdiction") or {}).get("name"),
+        "session": b.get("session"),
+        "latest_action": b.get("latest_action_date"),
+        "subjects": b.get("subject"),
+        "url": b.get("openstates_url"),
+        "raw": b,  # keep for persistence if you want
+    }
 
 def get_latest_session(jurisdiction_id: str) -> str:
-    """Fetch latest session using updated_desc sort (since session_desc is unsupported)."""
-    if jurisdiction_id in LATEST_SESSIONS:
-        return LATEST_SESSIONS[jurisdiction_id]
+    """Get the latest session string for a jurisdiction_id (OCD)."""
+    if jurisdiction_id in _LATEST_SESSIONS:
+        return _LATEST_SESSIONS[jurisdiction_id]
 
     params = {
-        "apikey": API_KEY,
-        "jurisdiction": jurisdiction_id,
+        "jurisdiction_id": jurisdiction_id,  # <-- correct param for OCD
         "sort": "updated_desc",
-        "per_page": 1
+        "per_page": 1,
     }
-    try:
-        response = requests.get(f"{BASE_URL}/bills", params=params)
-        response.raise_for_status()
-        data = response.json()
-        results = data.get("results", [])
-        if not results:
-            raise OpenStatesError("No bills found for jurisdiction.")
-        latest_session = results[0].get("session")
-        if not latest_session:
-            raise OpenStatesError("No session field found in result.")
-        LATEST_SESSIONS[jurisdiction_id] = latest_session
-        return latest_session
-    except requests.RequestException as e:
-        raise OpenStatesError(f"Failed to fetch latest session: {str(e)}")
+    data = _request("GET", "/bills", params=params)
+    results = data.get("results") or []
+    if not results:
+        raise OpenStatesError("No bills found for jurisdiction to infer session")
+    session = results[0].get("session")
+    if not session:
+        raise OpenStatesError("No session field on latest bill")
+    _LATEST_SESSIONS[jurisdiction_id] = session
+    return session
 
-
-def get_bills(jurisdiction: str, q: str = None, limit: int = 5) -> List[Dict[str, Any]]:
-    """Fetch recent bills for a jurisdiction and optional keyword."""
-    if not API_KEY:
-        raise InvalidAPIKeyError("API key required")
-
+def get_bills(jurisdiction: str, q: Optional[str] = None, limit: int = 5) -> List[Dict[str, Any]]:
+    """
+    Fetch recent bills for a state “jurisdiction” (e.g., 'California').
+    Uses OCD jurisdiction_id under the hood and auto-detects current session.
+    """
     ocd_id = JURISDICTION_MAP.get(jurisdiction.lower())
     if not ocd_id:
         raise ValueError(f"Unknown jurisdiction: {jurisdiction}")
 
-    # Auto-detect session
     session = get_latest_session(ocd_id)
-
-    params = {
-        "apikey": API_KEY,
-        "jurisdiction": ocd_id,
+    params: Dict[str, Any] = {
+        "jurisdiction_id": ocd_id,
         "session": session,
         "sort": "updated_desc",
-        "per_page": limit
+        "per_page": limit,
     }
     if q:
         params["q"] = q
 
-    try:
-        response = requests.get(f"{BASE_URL}/bills", params=params)
-        response.raise_for_status()
-        data = response.json()
-        results = data.get("results", [])
-    except requests.RequestException as e:
-        raise OpenStatesError(f"API request failed: {str(e)}")
+    data = _request("GET", "/bills", params=params)
+    results = data.get("results") or []
+    return [_normalize_bill(b) for b in results]
 
-    bills = []
-    for bill in results:
-        bills.append({
-            "id": bill.get("identifier"),
-            "title": bill.get("title"),
-            "jurisdiction": bill.get("jurisdiction", {}).get("name", jurisdiction),
-            "session": bill.get("session"),
-            "latest_action": bill.get("latest_action_date"),
-            "subjects": bill.get("subject"),
-            "link": bill.get("openstates_url")
-        })
-    return bills
-
-
-if __name__ == "__main__":
-    try:
-        print("=== North Carolina (auto session): Scorpion-related bills ===")
-        nc_bills = get_bills("North Carolina", q="scorpion")
-        for b in nc_bills:
-            print(f"{b['id']}: {b['title']} ({b['latest_action']})")
-
-        print("\n=== California (auto session): Food access bills ===")
-        ca_bills = get_bills("California", q="food access")
-        for b in ca_bills:
-            print(f"{b['id']}: {b['title']} ({b['latest_action']})")
-        
-        print("\n=== Texas: housing bills ===")
-        tx_housing = get_bills("Texas", "housing")
-        for b in tx_housing:
-            print(f"{b['id']}: {b['title']} ({b['latest_action']})")
-
-    except Exception as e:
-        print(f"Error: {e}")
+def search_bills_raw(**params) -> Dict[str, Any]:
+    """
+    Escape hatch if you want to pass-through query params directly.
+    You still get headers + error handling.
+    """
+    return _request("GET", "/bills", params=params)
