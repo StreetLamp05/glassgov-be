@@ -5,7 +5,7 @@ By combining open legislative data with AI-powered summaries and community feedb
 
 GlassGov reimagines civic engagement for the modern age, making participation easier, transparency stronger, and democracy more collaborative.
 
-🌐 [**glassgov.tech**](glassgov.tech)
+🌐 **https://www.glassgov.tech/**
 
 <img width="1050" height="512" alt="image" src="https://github.com/user-attachments/assets/17b6f0f8-1231-4fb0-9c60-7e2c73ad506f" />
 
