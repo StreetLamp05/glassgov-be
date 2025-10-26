@@ -31,3 +31,17 @@ class SourceType(str, Enum):
     budget         = "budget"
     lawsuit_docket = "lawsuit_docket"
     election_notice= "election_notice"
+
+class Category(str, Enum):
+    food_access = "food_access"
+    road_safety = "road_safety"
+    crime = "crime"
+    housing = "housing"
+    zoning = "zoning"
+    transport = "transport"
+    budget = "budget"
+    health = "health"
+
+class VoteType(str, Enum):
+    up = "up"
+    down = "down"
