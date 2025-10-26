@@ -1,9 +1,9 @@
 import requests
 from typing import Dict, List, Any
-
+import os
 BASE_URL = "https://v3.openstates.org"
-API_KEY = "8f75e95e-a70d-42c4-957a-2161e15a1357"
-
+API_KEY = os.getenv("OPENSTATES_API_KEY")
+# TODO: FIX API KEY FETCHING, ALSO REQ NEW API KEY
 class OpenStatesError(Exception):
     pass
 
