@@ -1,3 +1,12 @@
+# Introduction
+GlassGov, is a platform that empowers citizens to understand, discuss, and influence the policies that shape their lives. In a world where government often feels distant, GlassGov brings clarity and connection, transforming local concerns into meaningful civic insight.
+
+By combining open legislative data with AI-powered summaries and community feedback, GlassGov helps people see how their everyday issues relate to real bills and actions in their state. It gives citizens a clear, accessible view of what’s happening in government, and how their voices can drive change.
+
+GlassGov reimagines civic engagement for the modern age, making participation easier, transparency stronger, and democracy more collaborative.
+🌐 glassgov.tech
+
+
 # GlassGov Flask Backend (Flask + PostgreSQL)
 GlassGov Backend using SQLAlchemy, Alembic (Flask-migrate), CORS, and a wsgi endpoint. 
 Runs in a docker container w/ postgres.
