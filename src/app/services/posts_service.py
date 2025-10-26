@@ -5,7 +5,7 @@ from .ner_service import analyze
 
 def create_post(title: str, body: str, city: str, county: str | None, state_name: str):
     ner = analyze(f"{title}\n{body}")
-    category = Category(ner["category"])
+    primary = Category(ner["category"])
     post = CitizenPost(title=title, body=body, category=category, city=city, county=county, state_name=state_name)
     db.session.add(post)
     db.session.flush()  # get post.id
@@ -17,7 +17,7 @@ def list_posts(city: str | None, state_name: str | None, category: str | None, l
     q = CitizenPost.query
     if city: q = q.filter(CitizenPost.city.ilike(city))
     if state_name: q = q.filter(CitizenPost.state_name == state_name)
-    if category: q = q.filter(CitizenPost.category == category)
+    if category: q = q.filter(CitizenPost.category == Category(category))
     return q.order_by(CitizenPost.score.desc(), CitizenPost.created_at.desc()).limit(limit).all()
 
 def vote_post(post_id, voter_token_hash: str | None, vote: VoteType):

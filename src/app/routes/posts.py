@@ -2,6 +2,9 @@ from flask import Blueprint, request
 from ..services.posts_service import create_post, list_posts, vote_post
 from ..models.enums import VoteType
 from ..models.civic import CitizenPost
+from ..services.ner_service import analyze
+
+
 
 bp = Blueprint("posts", __name__)
 
@@ -15,11 +18,15 @@ def create():
         county=data.get("county"),
         state_name=data["state_name"],
     )
+    ner = analyze(f"{post.title}\n{post.body}")  # <- get multi-labels for response
     return {
         "id": str(post.id),
         "title": post.title,
         "body": post.body,
-        "category": post.category.value,
+        "primary_category": post.category.value,        # enum stored
+        "categories": ner["categories"],                # [{label, score}, ...]
+        "tags": ner["tags"],
+        "entities": ner["entities"],
         "city": post.city,
         "state_name": post.state_name,
         "score": post.score,

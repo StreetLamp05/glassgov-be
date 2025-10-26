@@ -25,6 +25,15 @@ COPY pyproject.toml poetry.lock ./
 # Install deps
 RUN poetry install --no-root
 
+
+
+RUN poetry run python - <<'PY'
+import spacy, spacy.cli
+spacy.cli.download("en_core_web_sm")
+PY
+
+
+
 # Copy source & entrypoint
 COPY src ./src
 COPY tests ./tests
