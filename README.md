@@ -9,6 +9,12 @@ GlassGov reimagines civic engagement for the modern age, making participation ea
 
 <img width="1050" height="512" alt="image" src="https://github.com/user-attachments/assets/17b6f0f8-1231-4fb0-9c60-7e2c73ad506f" />
 
+#Team
+Made by:
+
+**David Kan**: University of Georgia (3rd year) B.S Computer Science 
+**Jasmine Nguyen**: University of Georgia (3rd year) B.S Data Science 
+
 
 # GlassGov Flask Backend (Flask + PostgreSQL)
 GlassGov Backend using SQLAlchemy, Alembic (Flask-migrate), CORS, and a wsgi endpoint. 
