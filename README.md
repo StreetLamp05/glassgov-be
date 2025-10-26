@@ -37,12 +37,6 @@ set up .env
 docker compose up --build -d
 ```
 
-``` shell
-# init migrations (do once)
-docker compose exec app poetry run flask db init
-docker compose exec app poetry run flask db migrate -m "init"
-docker compose exec app poetry run flask db upgrade
-```
 
 ``` shell
 # test
