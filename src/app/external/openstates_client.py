@@ -1,128 +1,158 @@
-"""OpenStates API client.
-
-This module provides a small, reusable client for calling the OpenStates API.
-
-Configuration:
-- Set `OPENSTATES_API_KEY` in the environment to your OpenStates API key.
-- Optionally set `OPENSTATES_BASE_URL` to override the API base URL.
-
-Example:
-	from app.external.openstates_client import OpenStatesClient
-
-	client = OpenStatesClient()  # reads API key from OPENSTATES_API_KEY
-	legislators = client.get_legislators(state="ny")
-
-Notes:
-- The client includes retries for transient failures and raises requests.HTTPError
-  for non-2xx responses. It attaches the API key both as a query parameter (apikey)
-  and as an X-API-Key header to be compatible with common OpenStates usage patterns.
-"""
-
-from __future__ import annotations
-
-import os
-import urllib.parse
-from typing import Any, Dict, Optional
-
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-from dotenv import load_dotenv
-from pathlib import Path
+from typing import Dict, List, Any
 
-project_root = Path(__file__).resolve().parents[3]
-env_path = project_root / ".env"
-if env_path.exists():
-    load_dotenv(env_path)
-else:
-    load_dotenv()
+BASE_URL = "https://v3.openstates.org"
+API_KEY = "8f75e95e-a70d-42c4-957a-2161e15a1357"
 
-DEFAULT_BASE_URL = os.getenv("OPENSTATES_BASE_URL", "https://openstates.org/api/v1/")
-DEFAULT_API_KEY = os.getenv("OPENSTATES_API_KEY")
+class OpenStatesError(Exception):
+    pass
 
+class InvalidAPIKeyError(OpenStatesError):
+    pass
 
-class OpenStatesClient:
-	"""Small OpenStates API client.
-
-	Args:
-		api_key: API key string. If not provided, the client will look for
-			the `OPENSTATES_API_KEY` environment variable.
-		base_url: Base URL for the OpenStates API. Defaults to
-			the `OPENSTATES_BASE_URL` env var or the public v1 endpoint.
-		timeout: Default request timeout in seconds.
-	"""
-
-	def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None, timeout: int = 10):
-		self.api_key = api_key or DEFAULT_API_KEY
-		self.base_url = (base_url or DEFAULT_BASE_URL).rstrip("/") + "/"
-		self.timeout = timeout
-
-		self.session = requests.Session()
-		retries = Retry(
-			total=3,
-			backoff_factor=0.3,
-			status_forcelist=(429, 500, 502, 503, 504),
-			allowed_methods=("GET", "POST"),
-		)
-		adapter = HTTPAdapter(max_retries=retries)
-		self.session.mount("https://", adapter)
-		self.session.mount("http://", adapter)
-
-	def _request(self, path: str, params: Optional[Dict[str, Any]] = None, method: str = "GET") -> Any:
-		url = urllib.parse.urljoin(self.base_url, path)
-		params = dict(params or {})
-
-		headers: Dict[str, str] = {}
-		if self.api_key:
-			# Add both header and query param for compatibility with different
-			# OpenStates deployments / versions.
-			headers["X-API-Key"] = self.api_key
-			params.setdefault("apikey", self.api_key)
-
-		resp = self.session.request(method, url, params=params, headers=headers, timeout=self.timeout)
-		resp.raise_for_status()
-		# Most OpenStates endpoints return JSON
-		return resp.json()
-
-	# --- Convenience methods ---
-	def get_legislators(self, *, state: str, **kwargs) -> Any:
-		"""Return legislators in a state.
-
-		Example: client.get_legislators(state='ny')
-		"""
-		params = {"state": state}
-		params.update(kwargs)
-		return self._request("legislators/", params=params)
-
-	def get_legislator(self, legislator_id: str) -> Any:
-		"""Get a single legislator by OpenStates id.
-
-		Example: client.get_legislator('ocd-person/123...')
-		"""
-		return self._request(f"legislators/{urllib.parse.quote(legislator_id)}/")
-
-	def search_bills(self, *, state: Optional[str] = None, query: Optional[str] = None, **kwargs) -> Any:
-		"""Search bills. Use `state` and/or `query`.
-
-		Example: client.search_bills(state='ny', query='education')
-		"""
-		params: Dict[str, Any] = {}
-		if state:
-			params["state"] = state
-		if query:
-			params["q"] = query
-		params.update(kwargs)
-		return self._request("bills/", params=params)
-
-	def get_bill(self, bill_id: str) -> Any:
-		"""Get a specific bill by id.
-
-		Note: bill_id format depends on OpenStates version; pass the id exactly as
-		returned by search endpoints.
-		"""
-		return self._request(f"bills/{urllib.parse.quote(bill_id)}/")
+JURISDICTION_MAP = {
+    "alabama": "ocd-jurisdiction/country:us/state:al/government",
+    "alaska": "ocd-jurisdiction/country:us/state:ak/government",
+    "arizona": "ocd-jurisdiction/country:us/state:az/government",
+    "arkansas": "ocd-jurisdiction/country:us/state:ar/government",
+    "california": "ocd-jurisdiction/country:us/state:ca/government",
+    "colorado": "ocd-jurisdiction/country:us/state:co/government",
+    "connecticut": "ocd-jurisdiction/country:us/state:ct/government",
+    "delaware": "ocd-jurisdiction/country:us/state:de/government",
+    "florida": "ocd-jurisdiction/country:us/state:fl/government",
+    "georgia": "ocd-jurisdiction/country:us/state:ga/government",
+    "hawaii": "ocd-jurisdiction/country:us/state:hi/government",
+    "idaho": "ocd-jurisdiction/country:us/state:id/government",
+    "illinois": "ocd-jurisdiction/country:us/state:il/government",
+    "indiana": "ocd-jurisdiction/country:us/state:in/government",
+    "iowa": "ocd-jurisdiction/country:us/state:ia/government",
+    "kansas": "ocd-jurisdiction/country:us/state:ks/government",
+    "kentucky": "ocd-jurisdiction/country:us/state:ky/government",
+    "louisiana": "ocd-jurisdiction/country:us/state:la/government",
+    "maine": "ocd-jurisdiction/country:us/state:me/government",
+    "maryland": "ocd-jurisdiction/country:us/state:md/government",
+    "massachusetts": "ocd-jurisdiction/country:us/state:ma/government",
+    "michigan": "ocd-jurisdiction/country:us/state:mi/government",
+    "minnesota": "ocd-jurisdiction/country:us/state:mn/government",
+    "mississippi": "ocd-jurisdiction/country:us/state:ms/government",
+    "missouri": "ocd-jurisdiction/country:us/state:mo/government",
+    "montana": "ocd-jurisdiction/country:us/state:mt/government",
+    "nebraska": "ocd-jurisdiction/country:us/state:ne/government",
+    "nevada": "ocd-jurisdiction/country:us/state:nv/government",
+    "new hampshire": "ocd-jurisdiction/country:us/state:nh/government",
+    "new jersey": "ocd-jurisdiction/country:us/state:nj/government",
+    "new mexico": "ocd-jurisdiction/country:us/state:nm/government",
+    "new york": "ocd-jurisdiction/country:us/state:ny/government",
+    "north carolina": "ocd-jurisdiction/country:us/state:nc/government",
+    "north dakota": "ocd-jurisdiction/country:us/state:nd/government",
+    "ohio": "ocd-jurisdiction/country:us/state:oh/government",
+    "oklahoma": "ocd-jurisdiction/country:us/state:ok/government",
+    "oregon": "ocd-jurisdiction/country:us/state:or/government",
+    "pennsylvania": "ocd-jurisdiction/country:us/state:pa/government",
+    "rhode island": "ocd-jurisdiction/country:us/state:ri/government",
+    "south carolina": "ocd-jurisdiction/country:us/state:sc/government",
+    "south dakota": "ocd-jurisdiction/country:us/state:sd/government",
+    "tennessee": "ocd-jurisdiction/country:us/state:tn/government",
+    "texas": "ocd-jurisdiction/country:us/state:tx/government",
+    "utah": "ocd-jurisdiction/country:us/state:ut/government",
+    "vermont": "ocd-jurisdiction/country:us/state:vt/government",
+    "virginia": "ocd-jurisdiction/country:us/state:va/government",
+    "washington": "ocd-jurisdiction/country:us/state:wa/government",
+    "west virginia": "ocd-jurisdiction/country:us/state:wv/government",
+    "wisconsin": "ocd-jurisdiction/country:us/state:wi/government",
+    "wyoming": "ocd-jurisdiction/country:us/state:wy/government",
+    "district of columbia": "ocd-jurisdiction/country:us/district:dc/government"
+}
+LATEST_SESSIONS: Dict[str, str] = {}
 
 
-__all__ = ["OpenStatesClient", "DEFAULT_API_KEY", "DEFAULT_BASE_URL"]
+def get_latest_session(jurisdiction_id: str) -> str:
+    """Fetch latest session using updated_desc sort (since session_desc is unsupported)."""
+    if jurisdiction_id in LATEST_SESSIONS:
+        return LATEST_SESSIONS[jurisdiction_id]
 
-# TODO: TEST
+    params = {
+        "apikey": API_KEY,
+        "jurisdiction": jurisdiction_id,
+        "sort": "updated_desc",
+        "per_page": 1
+    }
+    try:
+        response = requests.get(f"{BASE_URL}/bills", params=params)
+        response.raise_for_status()
+        data = response.json()
+        results = data.get("results", [])
+        if not results:
+            raise OpenStatesError("No bills found for jurisdiction.")
+        latest_session = results[0].get("session")
+        if not latest_session:
+            raise OpenStatesError("No session field found in result.")
+        LATEST_SESSIONS[jurisdiction_id] = latest_session
+        return latest_session
+    except requests.RequestException as e:
+        raise OpenStatesError(f"Failed to fetch latest session: {str(e)}")
+
+
+def get_bills(jurisdiction: str, q: str = None, limit: int = 5) -> List[Dict[str, Any]]:
+    """Fetch recent bills for a jurisdiction and optional keyword."""
+    if not API_KEY:
+        raise InvalidAPIKeyError("API key required")
+
+    ocd_id = JURISDICTION_MAP.get(jurisdiction.lower())
+    if not ocd_id:
+        raise ValueError(f"Unknown jurisdiction: {jurisdiction}")
+
+    # Auto-detect session
+    session = get_latest_session(ocd_id)
+
+    params = {
+        "apikey": API_KEY,
+        "jurisdiction": ocd_id,
+        "session": session,
+        "sort": "updated_desc",
+        "per_page": limit
+    }
+    if q:
+        params["q"] = q
+
+    try:
+        response = requests.get(f"{BASE_URL}/bills", params=params)
+        response.raise_for_status()
+        data = response.json()
+        results = data.get("results", [])
+    except requests.RequestException as e:
+        raise OpenStatesError(f"API request failed: {str(e)}")
+
+    bills = []
+    for bill in results:
+        bills.append({
+            "id": bill.get("identifier"),
+            "title": bill.get("title"),
+            "jurisdiction": bill.get("jurisdiction", {}).get("name", jurisdiction),
+            "session": bill.get("session"),
+            "latest_action": bill.get("latest_action_date"),
+            "subjects": bill.get("subject"),
+            "link": bill.get("openstates_url")
+        })
+    return bills
+
+
+if __name__ == "__main__":
+    try:
+        print("=== North Carolina (auto session): Scorpion-related bills ===")
+        nc_bills = get_bills("North Carolina", q="scorpion")
+        for b in nc_bills:
+            print(f"{b['id']}: {b['title']} ({b['latest_action']})")
+
+        print("\n=== California (auto session): Food access bills ===")
+        ca_bills = get_bills("California", q="food access")
+        for b in ca_bills:
+            print(f"{b['id']}: {b['title']} ({b['latest_action']})")
+        
+        print("\n=== Texas: housing bills ===")
+        tx_housing = get_bills("Texas", "housing")
+        for b in tx_housing:
+            print(f"{b['id']}: {b['title']} ({b['latest_action']})")
+
+    except Exception as e:
+        print(f"Error: {e}")
