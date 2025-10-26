@@ -4,7 +4,10 @@ GlassGov, is a platform that empowers citizens to understand, discuss, and influ
 By combining open legislative data with AI-powered summaries and community feedback, GlassGov helps people see how their everyday issues relate to real bills and actions in their state. It gives citizens a clear, accessible view of what’s happening in government, and how their voices can drive change.
 
 GlassGov reimagines civic engagement for the modern age, making participation easier, transparency stronger, and democracy more collaborative.
+
 🌐 glassgov.tech
+
+<img width="1050" height="512" alt="image" src="https://github.com/user-attachments/assets/17b6f0f8-1231-4fb0-9c60-7e2c73ad506f" />
 
 
 # GlassGov Flask Backend (Flask + PostgreSQL)
